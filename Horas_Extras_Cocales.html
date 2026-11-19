@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Control de Tiempo Extraordinario · cbc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#13211E;
+  --ink-2:#4a5a56;
+  --line:#d6dedb;
+  --paper:#eef2f1;
+  --card:#ffffff;
+  --verde:#0F6B5C;
+  --verde-osc:#0A4F44;
+  --ambar:#B57914;
+  --rojo:#C0392B;
+  --ok:#1f7a4d;
+  --radius:6px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:15px;line-height:1.45;padding-bottom:92px;
+}
+.wrap{max-width:860px;margin:0 auto;padding:0 14px}
+
+header{background:#0C1F1C;color:#fff;padding:16px 0 14px;border-bottom:4px solid var(--verde)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.marca{display:flex;align-items:center;gap:11px}
+.logo{width:34px;height:34px;flex:none}
+.titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;line-height:1;
+  letter-spacing:.02em;text-transform:uppercase}
+.subtitulo{font-size:11px;color:#8fa8a2;letter-spacing:.09em;text-transform:uppercase;margin-top:3px}
+.contador{font-family:'Roboto Mono',monospace;text-align:right;font-size:10.5px;color:#8fa8a2;
+  letter-spacing:.05em;text-transform:uppercase}
+.contador b{display:block;font-size:26px;color:#fff;font-weight:500;line-height:1.1}
+
+nav{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+nav .wrap{display:flex;gap:0}
+nav button{flex:1;background:none;border:none;padding:13px 4px 11px;cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:#8a9793;
+  border-bottom:3px solid transparent;transition:.15s}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--verde)}
+nav button:focus-visible{outline:2px solid var(--verde);outline-offset:-2px}
+nav .pend{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;
+  background:var(--ambar);color:#fff;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;
+  line-height:18px;vertical-align:1px}
+nav .pend[hidden]{display:none}
+
+section[hidden]{display:none}
+
+.bloque{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px;margin-top:14px}
+.bloque h2{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;margin:0 0 3px}
+.bloque h2 .num{color:var(--verde);margin-right:7px;font-family:'Roboto Mono',monospace;font-size:12px}
+.ayuda{font-size:12px;color:var(--ink-2);margin:0 0 13px}
+
+.grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+.col-full{grid-column:1/-1}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+
+label{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);margin-bottom:5px}
+label .req{color:var(--verde)}
+input,select,textarea{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);
+  background:#fafbfb;border:1px solid var(--line);border-radius:var(--radius)}
+input[type="number"],input[type="time"]{font-family:'Roboto Mono',monospace}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--verde);background:#fff}
+input.error,select.error,canvas.error{border-color:var(--rojo);background:#fdf3f2}
+input[readonly]{background:#eef2f1;color:var(--ink-2)}
+
+/* Cálculo en vivo */
+.calc{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:13px}
+.calc div{background:#fff;padding:10px 8px;text-align:center}
+.calc .k{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#8a9793}
+.calc .v{font-family:'Roboto Mono',monospace;font-size:18px;font-weight:600;margin-top:2px}
+.calc .v.destaca{color:var(--verde)}
+.calc .tipo{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.04em;margin-top:3px}
+@media(max-width:560px){.calc{grid-template-columns:1fr 1fr}}
+
+.firma-cab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.limpiar{background:none;border:none;color:var(--verde);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;padding:4px 0}
+canvas{width:100%;height:140px;display:block;background:#fff;
+  border:1px solid var(--line);border-radius:var(--radius);touch-action:none;cursor:crosshair}
+.pie-firma{display:flex;align-items:center;gap:7px;font-size:11px;color:#9aa5a2;margin-top:5px;letter-spacing:.05em;text-transform:uppercase}
+.pie-firma .punto{width:7px;height:7px;border-radius:50%;background:var(--line);flex:none}
+.firma.lista .punto{background:var(--ok)}
+.firma.lista .estado{color:var(--ok)}
+
+.barra{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);
+  padding:11px 14px;padding-bottom:calc(11px + env(safe-area-inset-bottom));z-index:30}
+.barra .wrap{display:flex;gap:9px;padding:0}
+.btn{flex:1;padding:14px 12px;border:none;border-radius:var(--radius);cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;
+  letter-spacing:.07em;text-transform:uppercase;transition:.15s}
+.btn-verde{background:var(--verde);color:#fff}
+.btn-verde:active{background:var(--verde-osc)}
+.btn-linea{background:#fff;color:var(--ink);border:1px solid var(--line);flex:0 0 auto;padding:14px 18px}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* Registros */
+.filtros{display:flex;gap:9px;align-items:flex-end;margin-top:14px;flex-wrap:wrap}
+.filtros>div{flex:1;min-width:150px}
+.reg{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--ambar);
+  border-radius:var(--radius);padding:13px 14px;margin-top:10px}
+.reg.aprobado{border-left-color:var(--ok)}
+.reg-cab{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.reg-nom{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;letter-spacing:.02em;line-height:1.15}
+.reg-fecha{font-family:'Roboto Mono',monospace;font-size:11px;color:#9aa5a2;white-space:nowrap}
+.reg-puesto{font-size:12px;color:var(--ink-2);margin-top:1px}
+.reg-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:9px;margin-top:10px}
+.dato .k{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#9aa5a2}
+.dato .v{font-family:'Roboto Mono',monospace;font-size:14px;font-weight:500;margin-top:1px}
+.reg-pie{display:flex;gap:8px;margin-top:11px;padding-top:10px;border-top:1px solid var(--line);flex-wrap:wrap}
+.mini{background:none;border:1px solid var(--line);border-radius:4px;padding:6px 11px;cursor:pointer;
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2)}
+.mini.ok{color:#fff;background:var(--ok);border-color:var(--ok)}
+.mini.peligro{color:var(--rojo);border-color:#f0c9c6}
+.etq{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase}
+.etq.pend{background:#FDF3E0;color:var(--ambar)}
+.etq.apro{background:#E7F4ED;color:var(--ok)}
+.etq.ajus{background:#EDF1FA;color:#2E5AAC;margin-left:5px}
+.vacio{text-align:center;padding:44px 20px;color:#9aa5a2;font-size:14px}
+.vacio .icono{font-size:30px;opacity:.35;margin-bottom:8px}
+
+.totales{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:14px}
+.total{background:#fff;padding:12px 8px;text-align:center}
+.total .k{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#9aa5a2}
+.total .v{font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:700;line-height:1.1;margin-top:2px}
+
+table.tb{width:100%;border-collapse:collapse;margin-top:12px;background:#fff;
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;font-size:13px}
+table.tb th{background:#0C1F1C;color:#fff;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  padding:8px 7px;text-align:left;font-weight:600}
+table.tb td{padding:7px;border-top:1px solid var(--line)}
+table.tb td.num{font-family:'Roboto Mono',monospace;text-align:right}
+table.tb tr:nth-child(even) td{background:#f7f9f8}
+
+.aviso{position:fixed;left:50%;transform:translateX(-50%) translateY(-100px);
+  top:14px;z-index:60;background:#0C1F1C;color:#fff;padding:12px 20px;border-radius:var(--radius);
+  font-size:14px;font-weight:500;box-shadow:0 8px 26px rgba(0,0,0,.28);transition:transform .28s;
+  max-width:92vw;text-align:center}
+.aviso.ver{transform:translateX(-50%) translateY(0)}
+.aviso.ok{background:var(--ok)}
+.aviso.mal{background:var(--rojo)}
+
+.nota{font-size:12px;color:var(--ink-2);background:#fff;border:1px solid var(--line);
+  border-left:3px solid var(--ambar);border-radius:var(--radius);padding:11px 13px;margin-top:14px}
+
+.candado{text-align:center;padding:40px 20px}
+.candado .ic{font-size:34px;opacity:.3}
+.candado p{font-size:13px;color:var(--ink-2);max-width:380px;margin:10px auto 16px}
+.candado input{max-width:200px;margin:0 auto;text-align:center;font-family:'Roboto Mono',monospace;
+  font-size:22px;letter-spacing:.3em}
+
+@media print{body{background:#fff}nav,.barra,header{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="marca">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true">
+        <g fill="#fff">
+          <path d="M20 5 L23.5 14 L20 18 L16.5 14 Z"/>
+          <path d="M35 20 L26 23.5 L22 20 L26 16.5 Z"/>
+          <path d="M20 35 L16.5 26 L20 22 L23.5 26 Z"/>
+          <path d="M5 20 L14 16.5 L18 20 L14 23.5 Z"/>
+        </g>
+      </svg>
+      <div>
+        <div class="titulo">Tiempo Extraordinario</div>
+        <div class="subtitulo">Discarga · Agencia Cocales</div>
+      </div>
+    </div>
+    <div class="contador">
+      <b id="horasHoy">0</b>
+      horas extra hoy
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="wrap">
+    <button id="tabReg" aria-selected="true" onclick="verPestana('reg')">Registrar</button>
+    <button id="tabVal" aria-selected="false" onclick="verPestana('val')">Validar<span class="pend" id="badge" hidden>0</span></button>
+    <button id="tabMes" aria-selected="false" onclick="verPestana('mes')">Mes</button>
+  </div>
+</nav>
+
+<!-- ============ REGISTRAR ============ -->
+<section id="secReg" class="wrap">
+
+  <div class="bloque">
+    <h2><span class="num">01</span>Colaborador</h2>
+    <p class="ayuda">Seleccione su nombre en la lista. El puesto y el código se completan solos.</p>
+    <div class="grid">
+      <div class="col-full">
+        <label for="persona">Nombre completo <span class="req">*</span></label>
+        <select id="persona" onchange="pintaPersona()">
+          <option value="">Seleccione…</option>
+        </select>
+      </div>
+      <div>
+        <label for="codigo">Código</label>
+        <input type="text" id="codigo" readonly>
+      </div>
+      <div>
+        <label for="puesto">Puesto</label>
+        <input type="text" id="puesto" readonly>
+      </div>
+    </div>
+  </div>
+
+  <div class="bloque">
+    <h2><span class="num">02</span>Horario trabajado</h2>
+    <p class="ayuda">Hora de ingreso y de salida. Si la salida es del día siguiente, el sistema lo reconoce solo.</p>
+    <div class="grid">
+      <div>
+        <label for="fecha">Fecha de ingreso <span class="req">*</span></label>
+        <input type="date" id="fecha" onchange="calcula()">
+      </div>
+      <div></div>
+      <div>
+        <label for="entrada">Hora de entrada <span class="req">*</span></label>
+        <input type="time" id="entrada" onchange="calcula()" oninput="calcula()">
+      </div>
+      <div>
+        <label for="salida">Hora de salida <span class="req">*</span></label>
+        <input type="time" id="salida" onchange="calcula()" oninput="calcula()">
+      </div>
+      <div class="col-full">
+        <label for="actividad">Actividades realizadas</label>
+        <textarea id="actividad" rows="2" placeholder="Opcional. Ej. Apoyo con traslado de materiales de despacho"></textarea>
+      </div>
+    </div>
+
+    <div class="calc">
+      <div><div class="k">Jornada</div><div class="tipo" id="cTipo">—</div></div>
+      <div><div class="k">Horas trabajadas</div><div class="v" id="cTrab">0.00</div></div>
+      <div><div class="k">Ordinaria</div><div class="v" id="cOrd">—</div></div>
+      <div><div class="k">Horas extra</div><div class="v destaca" id="cExtra">0.00</div></div>
+    </div>
+  </div>
+
+  <div class="bloque">
+    <h2><span class="num">03</span>Firma</h2>
+    <p class="ayuda">Firme con el dedo o con lápiz óptico dentro del recuadro.</p>
+    <div class="firma" id="fColab">
+      <div class="firma-cab">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase">Firma del colaborador</span>
+        <button class="limpiar" type="button" onclick="limpiarFirma()">Borrar</button>
+      </div>
+      <canvas id="cFirma"></canvas>
+      <div class="pie-firma"><span class="punto"></span><span class="estado">Sin firmar</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VALIDAR ============ -->
+<section id="secVal" class="wrap" hidden>
+  <div id="candado" class="candado">
+    <div class="ic">◆</div>
+    <p>Esta sección es para el verificador de turno. Escriba el código de acceso para revisar y aprobar los registros del día.</p>
+    <input type="password" id="pin" inputmode="numeric" maxlength="8" placeholder="····" onkeydown="if(event.key==='Enter')abrirValidacion()">
+    <div style="margin-top:14px"><button class="mini" onclick="abrirValidacion()" style="padding:10px 22px">Entrar</button></div>
+  </div>
+
+  <div id="panelVal" hidden>
+    <div class="filtros">
+      <div>
+        <label for="vFecha">Día a revisar</label>
+        <input type="date" id="vFecha" onchange="pintarValidacion()">
+      </div>
+      <div>
+        <label for="vEstado">Estado</label>
+        <select id="vEstado" onchange="pintarValidacion()">
+          <option value="pend">Pendientes de validar</option>
+          <option value="todos">Todos</option>
+          <option value="apro">Ya aprobados</option>
+        </select>
+      </div>
+    </div>
+    <div id="listaVal"></div>
+  </div>
+</section>
+
+<!-- ============ MES ============ -->
+<section id="secMes" class="wrap" hidden>
+  <div class="filtros">
+    <div>
+      <label for="mMes">Mes</label>
+      <select id="mMes" onchange="pintarMes()"></select>
+    </div>
+    <div>
+      <label for="mAnio">Año</label>
+      <input type="number" id="mAnio" min="2024" max="2099" step="1" onchange="pintarMes()">
+    </div>
+    <div>
+      <label for="mSolo">Incluir</label>
+      <select id="mSolo" onchange="pintarMes()">
+        <option value="apro">Solo aprobados</option>
+        <option value="todos">Aprobados y pendientes</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="totales">
+    <div class="total"><div class="k">Diurnas</div><div class="v" id="tD">0</div></div>
+    <div class="total"><div class="k">Mixtas</div><div class="v" id="tM">0</div></div>
+    <div class="total"><div class="k">Nocturnas</div><div class="v" id="tN">0</div></div>
+    <div class="total"><div class="k">Total</div><div class="v" id="tT">0</div></div>
+  </div>
+
+  <div id="tablaMes"></div>
+
+  <div class="nota">
+    <b>Cómo llega al formato F-OS-37:</b> el botón <b>Exportar a Excel</b> genera un libro con una pestaña por día, en las mismas filas y columnas del formato oficial. Abra el día que necesite, seleccione el rango <b>G11:L29</b>, cópielo y péguelo en el mismo rango de su archivo. Las fórmulas de BASE DATOS, HISTORIAL y RESUMEN siguen funcionando porque no se toca ninguna.
+  </div>
+</section>
+
+<div class="barra">
+  <div class="wrap">
+    <button class="btn btn-verde" id="btnPrincipal" onclick="guardar()">Enviar registro</button>
+    <button class="btn btn-linea" onclick="menu()">···</button>
+  </div>
+</div>
+
+<div class="aviso" id="aviso"></div>
+
+<script>
+/* ===================== Configuración ===================== */
+// Para sincronizar a Google Sheets, pegue aquí la URL del Apps Script.
+// Déjelo vacío y la aplicación funciona igual, guardando en el dispositivo.
+const SHEETS_URL='';
+
+// Código de acceso del verificador. Cámbielo por el que prefiera.
+const PIN_VERIFICADOR='2026';
+
+// Jornadas ordinarias según el Código de Trabajo
+const JORNADA={DIURNA:8,MIXTA:7,NOCTURNA:6};
+
+const MESES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+             'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+/* ===================== Nómina ===================== */
+const NOMINA=[
+{fila:1,codigo:'DISALT-00009',empresa:'DSA',nombres:'HÉCTOR MANUEL',apellidos:'CHUCA SAMAYOA',puesto:'AUXILIAR DE BODEGA'},
+{fila:2,codigo:'DISALT-00003',empresa:'DSA',nombres:'BYRON ADAN',apellidos:'GOMEZ MARTINEZ',puesto:'AUXILIAR DE BODEGA'},
+{fila:3,codigo:'DISALT-00015',empresa:'DSA',nombres:'OBDULIO ROMARIO',apellidos:'JACOBO CAMEY',puesto:'AUXILIAR DE BODEGA'},
+{fila:4,codigo:'DISALT-00396',empresa:'DSA',nombres:'HUGO MARDOQUEO',apellidos:'GUTIERREZ PEREZ',puesto:'PILOTO DE PATIO'},
+{fila:5,codigo:'DISALT-00535',empresa:'DSA',nombres:'HECTOR DAVID',apellidos:'SINTO AJPUAC',puesto:'AUXILIAR DE BODEGA'},
+{fila:6,codigo:'DISALT-00677',empresa:'DSA',nombres:'LUIS AROLDO',apellidos:'ARRIAGA GARCIA',puesto:'PILOTO DE PATIO'},
+{fila:7,codigo:'DISALT-00847',empresa:'DSA',nombres:'JOSE LUIS',apellidos:'GARCIA ORDOÑEZ',puesto:'AUXILIAR DE BODEGA'},
+{fila:8,codigo:'DISALT-01043',empresa:'DSA',nombres:'HUGO ROLANDO',apellidos:'ESTRADA UMUL',puesto:'AUXILIAR DE BODEGA'},
+{fila:9,codigo:'DISALT-01076',empresa:'DSA',nombres:'DIEGO ALEJANDRO',apellidos:'DE LEON JIMENEZ',puesto:'AUXILIAR DE BODEGA'},
+{fila:10,codigo:'DISALT-01078',empresa:'DSA',nombres:'EDY AROLDO',apellidos:'DUARTE CHICH',puesto:'AUXILIAR DE BODEGA'},
+{fila:11,codigo:'DISALT-01077',empresa:'DSA',nombres:'EDWIN GEOVANNY',apellidos:'GUARCAS SALVADOR',puesto:'AUXILIAR DE BODEGA'},
+{fila:12,codigo:'DISALT-01085',empresa:'DSA',nombres:'RONALD ARODY',apellidos:'GUERRA ALVAREZ',puesto:'AUXILIAR DE BODEGA'},
+{fila:13,codigo:'DISALT-01075',empresa:'DSA',nombres:'ALLAN CORNELIO',apellidos:'PEREZ CETINO',puesto:'AUXILIAR DE BODEGA'},
+{fila:14,codigo:'DISALT-01083',empresa:'DSA',nombres:'JUAN LEONARDO MAURICIO',apellidos:'AJIN REN',puesto:'AUXILIAR DE BODEGA'},
+{fila:15,codigo:'DISALT-01081',empresa:'DSA',nombres:'JORGE LUIS',apellidos:'ALMIRA SOLOGUI',puesto:'MONTACARGUISTA'},
+{fila:16,codigo:'DISALT-01082',empresa:'DSA',nombres:'JUAN JOSE',apellidos:'BALCAZ MONTERROSO',puesto:'MONTACARGUISTA'},
+{fila:17,codigo:'DISALT-01079',empresa:'DSA',nombres:'ELIAS ADOLFO',apellidos:'GARCIA MIS',puesto:'MONTACARGUISTA'},
+{fila:18,codigo:'DISALT-01080',empresa:'DSA',nombres:'ERICK MARDOQUEO',apellidos:'TOS PAR',puesto:'MONTACARGUISTA'},
+{fila:19,codigo:'DISALT-01084',empresa:'DSA',nombres:'LUIS ARMANDO',apellidos:'YOC GARCIA',puesto:'MONTACARGUISTA'}
+];
+
+/* ===================== Almacenamiento ===================== */
+const CLAVE='cbc_horas_extras_v1';
+let registros=[];
+const memoria={};
+
+function leerCrudo(){try{return localStorage.getItem(CLAVE);}catch(e){return memoria[CLAVE]||null;}}
+function escribirCrudo(v){try{localStorage.setItem(CLAVE,v);}catch(e){memoria[CLAVE]=v;}}
+function cargar(){const v=leerCrudo();registros=v?JSON.parse(v):[];}
+function persistir(){
+  try{escribirCrudo(JSON.stringify(registros));}
+  catch(e){aviso('No se pudo guardar. Exporte un respaldo y libere espacio.','mal');}
+}
+
+/* ===================== Utilidades ===================== */
+function $(id){return document.getElementById(id);}
+function aviso(txt,tipo){
+  const a=$('aviso');a.textContent=txt;a.className='aviso ver '+(tipo||'');
+  clearTimeout(a._t);a._t=setTimeout(()=>a.className='aviso '+(tipo||''),3400);
+}
+function hoyISO(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+function horaAhora(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function fmt(n,d){return (Number(n)||0).toLocaleString('es-GT',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function nombreCompleto(p){return p.nombres+' '+p.apellidos;}
+function porFila(f){return NOMINA.find(p=>p.fila===f);}
+
+/* ===================== Cálculo de jornada ===================== */
+// Convierte "HH:MM" a horas decimales
+function aHoras(txt){
+  if(!txt||!/^\d{1,2}:\d{2}/.test(txt))return null;
+  const [h,m]=txt.split(':').map(Number);
+  return h+m/60;
+}
+// Clasifica la jornada: nocturna si entra de 18:00 en adelante o antes de 05:00;
+// de lo contrario diurna si termina a las 19:00 o antes, y mixta si se extiende más allá.
+function clasifica(e,s){
+  let dur=(s-e)%24; if(dur<=0)dur+=24;
+  const tipo=(e>=18||e<5)?'NOCTURNA':((e+dur)<=19?'DIURNA':'MIXTA');
+  return {tipo:tipo,trabajadas:dur,ordinaria:JORNADA[tipo],
+          extra:Math.max(0,Math.round((dur-JORNADA[tipo])*100)/100)};
+}
+function calculaDe(r){
+  const e=aHoras(r.entrada),s=aHoras(r.salida);
+  if(e===null||s===null)return null;
+  const c=clasifica(e,s);
+  // Si el verificador ajustó las horas, mandan las suyas
+  if(r.ajuste!=null){c.extra=Number(r.ajuste);}
+  if(r.tipoAjuste){c.tipo=r.tipoAjuste;c.ordinaria=JORNADA[r.tipoAjuste];}
+  return c;
+}
+function calcula(){
+  const e=aHoras($('entrada').value),s=aHoras($('salida').value);
+  if(e===null||s===null){
+    $('cTipo').textContent='—';$('cTrab').textContent='0.00';
+    $('cOrd').textContent='—';$('cExtra').textContent='0.00';return;
+  }
+  const c=clasifica(e,s);
+  $('cTipo').textContent=c.tipo;
+  $('cTrab').textContent=fmt(c.trabajadas,2);
+  $('cOrd').textContent=fmt(c.ordinaria,0);
+  $('cExtra').textContent=fmt(c.extra,2);
+}
+
+/* ===================== Firma ===================== */
+let firma={pintada:false,canvas:null,ctx:null};
+function iniciarFirma(){
+  const c=$('cFirma'),ctx=c.getContext('2d');
+  firma.canvas=c;firma.ctx=ctx;
+  function ajustar(){
+    const guardado=firma.pintada?c.toDataURL():null;
+    const r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    c.width=r.width*dpr;c.height=r.height*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#13211E';
+    if(guardado){const img=new Image();img.onload=()=>ctx.drawImage(img,0,0,r.width,r.height);img.src=guardado;}
+  }
+  setTimeout(ajustar,60);
+  window.addEventListener('resize',()=>setTimeout(ajustar,60));
+  let pintando=false;
+  function pos(ev){const r=c.getBoundingClientRect();const p=ev.touches?ev.touches[0]:ev;
+    return{x:p.clientX-r.left,y:p.clientY-r.top};}
+  function inicio(ev){ev.preventDefault();pintando=true;const p=pos(ev);ctx.beginPath();ctx.moveTo(p.x,p.y);}
+  function mover(ev){
+    if(!pintando)return;ev.preventDefault();
+    const p=pos(ev);ctx.lineTo(p.x,p.y);ctx.stroke();
+    if(!firma.pintada){firma.pintada=true;
+      $('fColab').classList.add('lista');
+      $('fColab').querySelector('.estado').textContent='Firmado';
+      c.classList.remove('error');}
+  }
+  function fin(){pintando=false;}
+  c.addEventListener('mousedown',inicio);c.addEventListener('mousemove',mover);
+  window.addEventListener('mouseup',fin);
+  c.addEventListener('touchstart',inicio,{passive:false});
+  c.addEventListener('touchmove',mover,{passive:false});
+  c.addEventListener('touchend',fin);
+}
+function limpiarFirma(){
+  firma.ctx.clearRect(0,0,firma.canvas.width,firma.canvas.height);
+  firma.pintada=false;
+  $('fColab').classList.remove('lista');
+  $('fColab').querySelector('.estado').textContent='Sin firmar';
+}
+function dataFirma(){
+  if(!firma.pintada)return '';
+  const tmp=document.createElement('canvas');
+  const escala=400/firma.canvas.width;
+  tmp.width=400;tmp.height=Math.round(firma.canvas.height*escala);
+  const t=tmp.getContext('2d');
+  t.fillStyle='#fff';t.fillRect(0,0,tmp.width,tmp.height);
+  t.drawImage(firma.canvas,0,0,tmp.width,tmp.height);
+  return tmp.toDataURL('image/jpeg',0.6);
+}
+
+/* ===================== Pestañas ===================== */
+function verPestana(cual){
+  $('secReg').hidden=cual!=='reg';
+  $('secVal').hidden=cual!=='val';
+  $('secMes').hidden=cual!=='mes';
+  $('tabReg').setAttribute('aria-selected',cual==='reg');
+  $('tabVal').setAttribute('aria-selected',cual==='val');
+  $('tabMes').setAttribute('aria-selected',cual==='mes');
+  const b=$('btnPrincipal');
+  if(cual==='reg'){b.textContent='Enviar registro';b.onclick=guardar;}
+  else if(cual==='val'){b.textContent='Aprobar los pendientes';b.onclick=aprobarTodos;}
+  else{b.textContent='Exportar a Excel';b.onclick=exportarExcel;}
+  if(cual==='val'&&validacionAbierta)pintarValidacion();
+  if(cual==='mes')pintarMes();
+  window.scrollTo(0,0);
+}
+
+/* ===================== Registrar ===================== */
+function pintaPersona(){
+  const f=Number($('persona').value);
+  const p=porFila(f);
+  $('codigo').value=p?p.codigo:'';
+  $('puesto').value=p?p.puesto:'';
+  $('persona').classList.remove('error');
+}
+function guardar(){
+  const obligatorios=[['persona','Nombre del colaborador'],['fecha','Fecha'],
+                      ['entrada','Hora de entrada'],['salida','Hora de salida']];
+  let falta=null;
+  obligatorios.forEach(([id,nom])=>{
+    const el=$(id);
+    if(!el.value){el.classList.add('error');if(!falta)falta=[el,nom];}
+    else el.classList.remove('error');
+  });
+  if(falta){falta[0].scrollIntoView({block:'center',behavior:'smooth'});
+    aviso('Falta completar: '+falta[1],'mal');return;}
+
+  if(!firma.pintada){
+    firma.canvas.classList.add('error');
+    firma.canvas.scrollIntoView({block:'center',behavior:'smooth'});
+    aviso('Falta la firma del colaborador','mal');return;}
+
+  const p=porFila(Number($('persona').value));
+  const c=clasifica(aHoras($('entrada').value),aHoras($('salida').value));
+
+  // Un colaborador no puede tener dos registros del mismo día
+  const dup=registros.find(r=>r.fila===p.fila&&r.fecha===$('fecha').value);
+  if(dup&&!confirm('Ya existe un registro de '+nombreCompleto(p)+' para esa fecha.\n\n¿Desea agregar otro de todas formas?'))return;
+
+  const r={
+    id:Date.now(),
+    fila:p.fila,codigo:p.codigo,empresa:p.empresa,
+    nombres:p.nombres,apellidos:p.apellidos,puesto:p.puesto,
+    fecha:$('fecha').value,entrada:$('entrada').value,salida:$('salida').value,
+    actividad:$('actividad').value.trim(),
+    tipo:c.tipo,trabajadas:c.trabajadas,extra:c.extra,
+    ajuste:null,tipoAjuste:null,motivo:'',
+    estado:'pendiente',validadoPor:'',validadoEn:'',
+    firma:dataFirma(),
+    capturadoEn:new Date().toLocaleString('es-GT')
+  };
+  registros.push(r);persistir();
+  limpiarFormulario();
+  actualizarContador();actualizarBadge();
+  aviso('Registro enviado · '+c.tipo.toLowerCase()+' · '+fmt(c.extra,2)+' h extra','ok');
+  enviarASheets(r);
+}
+function limpiarFormulario(){
+  ['persona','entrada','salida','actividad'].forEach(id=>{$(id).value='';$(id).classList.remove('error');});
+  $('codigo').value='';$('puesto').value='';
+  limpiarFirma();calcula();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ===================== Validación ===================== */
+let validacionAbierta=false;
+function abrirValidacion(){
+  if($('pin').value!==PIN_VERIFICADOR){aviso('Código incorrecto','mal');$('pin').value='';return;}
+  validacionAbierta=true;
+  $('candado').hidden=true;$('panelVal').hidden=false;
+  pintarValidacion();
+}
+function registrosDia(){
+  const f=$('vFecha').value, est=$('vEstado').value;
+  return registros.filter(r=>{
+    if(f&&r.fecha!==f)return false;
+    if(est==='pend'&&r.estado!=='pendiente')return false;
+    if(est==='apro'&&r.estado!=='aprobado')return false;
+    return true;
+  }).sort((a,b)=>a.fila-b.fila);
+}
+function pintarValidacion(){
+  const lista=registrosDia(),cont=$('listaVal');
+  if(!lista.length){
+    cont.innerHTML='<div class="vacio"><div class="icono">◇</div>No hay registros con ese filtro.</div>';
+    actualizarBadge();return;
+  }
+  cont.innerHTML=lista.map(r=>{
+    const c=calculaDe(r)||{tipo:'—',trabajadas:0,extra:0};
+    const apro=r.estado==='aprobado';
+    return `
+    <div class="reg ${apro?'aprobado':''}">
+      <div class="reg-cab">
+        <div>
+          <div class="reg-nom">${r.nombres} ${r.apellidos}</div>
+          <div class="reg-puesto">${r.puesto} · ${r.codigo}</div>
+        </div>
+        <span class="reg-fecha">${r.fecha}</span>
+      </div>
+      <div class="reg-datos">
+        <div class="dato"><div class="k">Entrada</div><div class="v">${r.entrada}</div></div>
+        <div class="dato"><div class="k">Salida</div><div class="v">${r.salida}</div></div>
+        <div class="dato"><div class="k">Trabajadas</div><div class="v">${fmt(c.trabajadas,2)}</div></div>
+        <div class="dato"><div class="k">Jornada</div><div class="v" style="font-size:12px">${c.tipo}</div></div>
+        <div class="dato"><div class="k">Horas extra</div><div class="v" style="color:var(--verde)">${fmt(c.extra,2)}</div></div>
+      </div>
+      ${r.actividad?`<div style="font-size:12px;color:var(--ink-2);margin-top:8px"><b>Actividad:</b> ${r.actividad}</div>`:''}
+      ${r.motivo?`<div style="font-size:12px;color:#2E5AAC;margin-top:6px"><b>Ajuste:</b> ${r.motivo}</div>`:''}
+      <div class="reg-pie">
+        <span class="etq ${apro?'apro':'pend'}">${apro?'Aprobado':'Pendiente'}</span>
+        ${r.ajuste!=null?'<span class="etq ajus">Ajustado</span>':''}
+        ${apro?'':`<button class="mini ok" onclick="aprobar(${r.id})">Aprobar</button>`}
+        <button class="mini" onclick="ajustar(${r.id})">Ajustar horas</button>
+        <button class="mini" onclick="verFirma(${r.id})">Ver firma</button>
+        <button class="mini peligro" onclick="borrar(${r.id})">Eliminar</button>
+      </div>
+    </div>`;}).join('');
+  actualizarBadge();
+}
+function aprobar(id){
+  const r=registros.find(x=>x.id===id);if(!r)return;
+  const quien=prompt('Nombre del verificador que aprueba:',r.validadoPor||'');
+  if(quien===null)return;
+  if(!quien.trim()){aviso('Debe indicar quién aprueba','mal');return;}
+  const c=calculaDe(r);
+  r.tipo=c.tipo;r.extra=c.extra;r.trabajadas=c.trabajadas;
+  r.estado='aprobado';r.validadoPor=quien.trim();
+  r.validadoEn=new Date().toLocaleString('es-GT');
+  persistir();pintarValidacion();actualizarContador();
+  aviso('Aprobado · '+r.nombres+' '+r.apellidos,'ok');
+  enviarASheets(r);
+}
+function aprobarTodos(){
+  if(!validacionAbierta){aviso('Primero escriba el código de acceso','mal');return;}
+  const pend=registrosDia().filter(r=>r.estado!=='aprobado');
+  if(!pend.length){aviso('No hay registros pendientes con ese filtro','mal');return;}
+  const quien=prompt('Nombre del verificador que aprueba los '+pend.length+' registros:');
+  if(quien===null)return;
+  if(!quien.trim()){aviso('Debe indicar quién aprueba','mal');return;}
+  const cuando=new Date().toLocaleString('es-GT');
+  pend.forEach(r=>{
+    const c=calculaDe(r);
+    r.tipo=c.tipo;r.extra=c.extra;r.trabajadas=c.trabajadas;
+    r.estado='aprobado';r.validadoPor=quien.trim();r.validadoEn=cuando;
+    enviarASheets(r);
+  });
+  persistir();pintarValidacion();actualizarContador();
+  aviso(pend.length+' registros aprobados','ok');
+}
+function ajustar(id){
+  const r=registros.find(x=>x.id===id);if(!r)return;
+  const c=calculaDe(r);
+  const nv=prompt('Horas extra calculadas: '+fmt(c.extra,2)+'\n\nEscriba el valor corregido (o deje el mismo para no cambiar):',fmt(c.extra,2));
+  if(nv===null)return;
+  const n=parseFloat(String(nv).replace(',','.'));
+  if(isNaN(n)||n<0){aviso('Valor no válido','mal');return;}
+  const tp=prompt('Tipo de jornada: DIURNA, MIXTA o NOCTURNA','{T}'.replace('{T}',c.tipo));
+  if(tp===null)return;
+  const T=String(tp).trim().toUpperCase();
+  if(!JORNADA[T]){aviso('El tipo debe ser DIURNA, MIXTA o NOCTURNA','mal');return;}
+  const mot=prompt('Motivo del ajuste (queda registrado):',r.motivo||'');
+  if(mot===null)return;
+  if(!mot.trim()){aviso('El ajuste necesita un motivo','mal');return;}
+  r.ajuste=n;r.tipoAjuste=T;r.motivo=mot.trim();
+  const c2=calculaDe(r);r.tipo=c2.tipo;r.extra=c2.extra;
+  persistir();pintarValidacion();actualizarContador();
+  aviso('Horas ajustadas a '+fmt(n,2),'ok');
+  enviarASheets(r);
+}
+function verFirma(id){
+  const r=registros.find(x=>x.id===id);if(!r)return;
+  const w=window.open('','_blank');
+  if(!w){aviso('Permita las ventanas emergentes para ver el comprobante','mal');return;}
+  const c=calculaDe(r)||{tipo:'—',trabajadas:0,extra:0};
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+  <title>Tiempo extraordinario ${r.nombres} ${r.fecha}</title><style>
+  body{font-family:Arial,Helvetica,sans-serif;color:#13211E;max-width:700px;margin:24px auto;padding:0 20px;font-size:13px}
+  h1{font-size:16px;letter-spacing:.06em;text-transform:uppercase;text-align:center;margin:0 0 4px}
+  .sub{text-align:center;color:#777;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;margin-bottom:14px}
+  td,th{border:1px solid #bbb;padding:7px 9px;text-align:left;font-size:12px}
+  th{background:#eef2f1;font-size:10px;letter-spacing:.06em;text-transform:uppercase;width:38%}
+  .fb{width:62%;margin:32px auto 0;text-align:center}
+  .fbimg{height:76px;display:flex;align-items:flex-end;justify-content:center}
+  .fbimg img{max-height:76px;max-width:100%}
+  .fbl{border-top:1px solid #13211E;padding-top:5px;font-size:12px}
+  .fbr{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:#777;margin-top:2px}
+  @media print{body{margin:0}}
+  </style></head><body>
+  <h1>Control de tiempo extraordinario</h1>
+  <div class="sub">Discarga · Agencia Cocales · F-OS-37</div>
+  <table>
+    <tr><th>Fecha</th><td>${r.fecha}</td></tr>
+    <tr><th>Código</th><td>${r.codigo}</td></tr>
+    <tr><th>Colaborador</th><td>${r.nombres} ${r.apellidos}</td></tr>
+    <tr><th>Puesto</th><td>${r.puesto}</td></tr>
+    <tr><th>Entrada / salida</th><td>${r.entrada} — ${r.salida}</td></tr>
+    <tr><th>Horas trabajadas</th><td>${fmt(c.trabajadas,2)}</td></tr>
+    <tr><th>Tipo de jornada</th><td>${c.tipo}</td></tr>
+    <tr><th>Horas extraordinarias</th><td><b>${fmt(c.extra,2)}</b></td></tr>
+    <tr><th>Actividades</th><td>${r.actividad||'—'}</td></tr>
+    <tr><th>Ajuste del verificador</th><td>${r.motivo||'—'}</td></tr>
+    <tr><th>Estado</th><td>${r.estado==='aprobado'?('Aprobado por '+r.validadoPor+' · '+r.validadoEn):'Pendiente de validación'}</td></tr>
+  </table>
+  <div class="fb">
+    <div class="fbimg">${r.firma?`<img src="${r.firma}">`:''}</div>
+    <div class="fbl">${r.nombres} ${r.apellidos}</div>
+    <div class="fbr">Firma del colaborador</div>
+  </div>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(),400);
+}
+function borrar(id){
+  const r=registros.find(x=>x.id===id);if(!r)return;
+  if(!confirm('¿Eliminar el registro de '+r.nombres+' '+r.apellidos+' del '+r.fecha+'?\n\nNo se puede deshacer.'))return;
+  registros=registros.filter(x=>x.id!==id);persistir();
+  pintarValidacion();actualizarContador();aviso('Registro eliminado');
+}
+function actualizarBadge(){
+  const n=registros.filter(r=>r.estado==='pendiente').length;
+  const b=$('badge');b.textContent=n;b.hidden=n===0;
+}
+
+/* ===================== Mes ===================== */
+function delMes(){
+  const m=Number($('mMes').value), a=Number($('mAnio').value), solo=$('mSolo').value;
+  return registros.filter(r=>{
+    const [y,mm]=r.fecha.split('-').map(Number);
+    if(y!==a||mm!==m+1)return false;
+    if(solo==='apro'&&r.estado!=='aprobado')return false;
+    return true;
+  });
+}
+function resumenPorPersona(){
+  const lista=delMes();
+  return NOMINA.map(p=>{
+    const suyos=lista.filter(r=>r.fila===p.fila);
+    const o={fila:p.fila,codigo:p.codigo,empresa:p.empresa,nombres:p.nombres,
+             apellidos:p.apellidos,puesto:p.puesto,DIURNA:0,MIXTA:0,NOCTURNA:0,dias:suyos.length};
+    suyos.forEach(r=>{const c=calculaDe(r);if(c)o[c.tipo]=Math.round((o[c.tipo]+c.extra)*100)/100;});
+    o.total=Math.round((o.DIURNA+o.MIXTA+o.NOCTURNA)*100)/100;
+    return o;
+  });
+}
+function pintarMes(){
+  const res=resumenPorPersona();
+  const tD=res.reduce((s,r)=>s+r.DIURNA,0),tM=res.reduce((s,r)=>s+r.MIXTA,0),
+        tN=res.reduce((s,r)=>s+r.NOCTURNA,0);
+  $('tD').textContent=fmt(tD,1);$('tM').textContent=fmt(tM,1);
+  $('tN').textContent=fmt(tN,1);$('tT').textContent=fmt(tD+tM+tN,1);
+
+  const conDatos=res.filter(r=>r.total>0||r.dias>0);
+  if(!conDatos.length){
+    $('tablaMes').innerHTML='<div class="vacio"><div class="icono">◇</div>No hay registros en ese mes.</div>';return;
+  }
+  $('tablaMes').innerHTML=`<table class="tb">
+    <tr><th>#</th><th>Colaborador</th><th>Puesto</th><th style="text-align:right">Diurna</th>
+        <th style="text-align:right">Mixta</th><th style="text-align:right">Nocturna</th>
+        <th style="text-align:right">Total</th></tr>
+    ${conDatos.map(r=>`<tr>
+      <td class="num">${r.fila}</td>
+      <td>${r.nombres} ${r.apellidos}</td>
+      <td style="font-size:11px;color:var(--ink-2)">${r.puesto}</td>
+      <td class="num">${r.DIURNA?fmt(r.DIURNA,2):'—'}</td>
+      <td class="num">${r.MIXTA?fmt(r.MIXTA,2):'—'}</td>
+      <td class="num">${r.NOCTURNA?fmt(r.NOCTURNA,2):'—'}</td>
+      <td class="num"><b>${fmt(r.total,2)}</b></td></tr>`).join('')}
+  </table>`;
+}
+
+/* ===================== Exportar a Excel ===================== */
+function exportarExcel(){
+  if(typeof XLSX==='undefined'){aviso('No se pudo cargar el generador de Excel','mal');return;}
+  const lista=delMes();
+  if(!lista.length){aviso('No hay registros en ese mes para exportar','mal');return;}
+  const m=Number($('mMes').value), a=Number($('mAnio').value);
+  const libro=XLSX.utils.book_new();
+
+  // --- Una hoja por día, en las MISMAS celdas del formato F-OS-37 ---
+  const diasMes=new Date(a,m+1,0).getDate();
+  for(let d=1;d<=diasMes;d++){
+    const fecha=a+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const delDia=lista.filter(r=>r.fecha===fecha);
+    const hoja={};
+    const pon=(cel,v,t)=>{if(v!==''&&v!=null)hoja[cel]={v:v,t:t||'s'};};
+    // Las horas se escriben como valor de hora de Excel, no como texto,
+    // para que al pegarlas en el formato oficial conserven su formato.
+    const ponHora=(cel,txt)=>{
+      const h=aHoras(txt);
+      if(h===null)return;
+      hoja[cel]={v:h/24,t:'n',z:'hh:mm'};
+    };
+
+    pon('C2','CONTROL TIEMPO EXTRAORDINARIO');
+    pon('C4','Empresa:');pon('D4','DISCARGA');
+    pon('C5','Agencia:');pon('D5','COCALES');
+    pon('C7','Del:');pon('D7',d,'n');pon('E7',MESES[m]);
+    pon('C8','Al:');pon('E8',a,'n');
+    pon('T7','F - OS - 37');
+    pon('G9','HORAS EXTRAORDINARIAS');pon('J9','HORARIOS');
+    ['CÓDIGO','EMPRESA','NOMBRES','APELLIDOS','PUESTO','DIURNA','MIXTA','NOCTURNA','ENTRADA','SALIDA','Actividades']
+      .forEach((h,i)=>pon(String.fromCharCode(66+i)+'10',h));
+
+    let sD=0,sM=0,sN=0;
+    NOMINA.forEach(p=>{
+      const f=10+p.fila; // fila 11 a 29
+      pon('A'+f,p.fila,'n');
+      pon('B'+f,p.codigo);pon('C'+f,p.empresa);
+      pon('D'+f,p.nombres);pon('E'+f,p.apellidos);pon('F'+f,p.puesto);
+      const r=delDia.find(x=>x.fila===p.fila);
+      if(!r)return;
+      const c=calculaDe(r);if(!c)return;
+      if(c.extra>0){
+        const col={DIURNA:'G',MIXTA:'H',NOCTURNA:'I'}[c.tipo];
+        pon(col+f,c.extra,'n');
+        if(c.tipo==='DIURNA')sD+=c.extra;else if(c.tipo==='MIXTA')sM+=c.extra;else sN+=c.extra;
+      }
+      ponHora('J'+f,r.entrada);ponHora('K'+f,r.salida);
+      pon('L'+f,r.actividad||'');
+    });
+    pon('C30','TOTAL HORAS POR DÍA');
+    pon('F30',Math.round((sD+sM+sN)*100)/100,'n');
+    pon('G30',Math.round(sD*100)/100,'n');
+    pon('H30',Math.round(sM*100)/100,'n');
+    pon('I30',Math.round(sN*100)/100,'n');
+    hoja['!ref']='A1:T32';
+    hoja['!cols']=[{wch:5},{wch:15},{wch:9},{wch:24},{wch:22},{wch:24},
+                   {wch:9},{wch:9},{wch:10},{wch:10},{wch:10},{wch:38}];
+    XLSX.utils.book_append_sheet(libro,hoja,'DIA '+d);
+  }
+
+  // --- Base de horarios: un renglón por registro ---
+  const base=lista.slice().sort((x,y)=>(x.fecha+String(x.fila).padStart(2,'0'))
+    .localeCompare(y.fecha+String(y.fila).padStart(2,'0'))).map(r=>{
+    const c=calculaDe(r)||{tipo:'',trabajadas:0,extra:0};
+    return {
+      'FECHA':r.fecha,'DIA':Number(r.fecha.slice(8,10)),'FILA':r.fila,
+      'CÓDIGO':r.codigo,'EMPRESA':r.empresa,'NOMBRES':r.nombres,'APELLIDOS':r.apellidos,
+      'PUESTO':r.puesto,'ENTRADA':r.entrada,'SALIDA':r.salida,
+      'HORAS TRABAJADAS':c.trabajadas,'JORNADA':c.tipo,
+      'DIURNA':c.tipo==='DIURNA'?c.extra:0,
+      'MIXTA':c.tipo==='MIXTA'?c.extra:0,
+      'NOCTURNA':c.tipo==='NOCTURNA'?c.extra:0,
+      'TOTAL EXTRA':c.extra,'ACTIVIDADES':r.actividad,
+      'ESTADO':r.estado==='aprobado'?'APROBADO':'PENDIENTE',
+      'VALIDADO POR':r.validadoPor,'VALIDADO EN':r.validadoEn,
+      'AJUSTE':r.motivo,'FIRMA':r.firma?'Firmada':'Sin firma'
+    };
+  });
+  const hB=XLSX.utils.json_to_sheet(base);
+  hB['!cols']=[{wch:11},{wch:5},{wch:5},{wch:15},{wch:9},{wch:24},{wch:22},{wch:24},
+               {wch:9},{wch:9},{wch:17},{wch:11},{wch:9},{wch:9},{wch:10},{wch:12},
+               {wch:36},{wch:11},{wch:20},{wch:20},{wch:30},{wch:10}];
+  hB['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:base.length,c:21}})};
+  hB['!freeze']={xSplit:0,ySplit:1};
+  XLSX.utils.book_append_sheet(libro,hB,'BASE HORARIO');
+
+  // --- Resumen por colaborador, igual que BASE DATOS ---
+  const res=resumenPorPersona().filter(r=>r.total>0);
+  const hR=XLSX.utils.json_to_sheet(res.map(r=>({
+    'MES':MESES[m],'AÑO':a,'FILA':r.fila,'CÓDIGO':r.codigo,'EMPRESA':r.empresa,
+    'NOMBRES':r.nombres,'APELLIDOS':r.apellidos,'PUESTO':r.puesto,
+    'DIURNA':r.DIURNA,'MIXTA':r.MIXTA,'NOCTURNA':r.NOCTURNA,'TOTAL':r.total,'DÍAS':r.dias
+  })));
+  hR['!cols']=[{wch:12},{wch:7},{wch:5},{wch:15},{wch:9},{wch:24},{wch:22},{wch:24},
+               {wch:9},{wch:9},{wch:10},{wch:9},{wch:7}];
+  XLSX.utils.book_append_sheet(libro,hR,'RESUMEN MES');
+
+  XLSX.writeFile(libro,'Horas_Extras_'+MESES[m]+'_'+a+'_Cocales.xlsx');
+  aviso('Libro generado · '+lista.length+' registros','ok');
+}
+
+/* ===================== Sincronización ===================== */
+function enviarASheets(r){
+  if(!SHEETS_URL)return;
+  fetch(SHEETS_URL,{method:'POST',body:JSON.stringify(Object.assign({tipo:'HORAS EXTRAS'},r))})
+    .then(res=>res.json())
+    .then(d=>{if(!d.ok)console.warn('Sheets:',d.error);})
+    .catch(()=>console.warn('Sin conexión — guardado solo en este dispositivo'));
+}
+function sincronizarTodo(){
+  if(!SHEETS_URL){aviso('Aún no se ha configurado la hoja en la nube','mal');return;}
+  registros.forEach(enviarASheets);
+  aviso('Enviando '+registros.length+' registros a la nube','ok');
+}
+
+/* ===================== Respaldo y menú ===================== */
+function descargar(txt,nombre,tipo){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:tipo}));
+  a.download=nombre;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function exportarRespaldo(){
+  if(!registros.length){aviso('No hay nada que respaldar','mal');return;}
+  descargar(JSON.stringify(registros),'Respaldo_Horas_Extras_'+hoyISO()+'.json','application/json');
+  aviso('Respaldo descargado. Guárdelo en su carpeta de nube.','ok');
+}
+function importarRespaldo(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const lector=new FileReader();
+    lector.onload=ev=>{
+      try{
+        const datos=JSON.parse(ev.target.result);
+        if(!Array.isArray(datos))throw 0;
+        const ids=new Set(registros.map(r=>r.id));
+        const nuevos=datos.filter(r=>!ids.has(r.id));
+        registros=registros.concat(nuevos);persistir();
+        actualizarContador();actualizarBadge();
+        if(validacionAbierta)pintarValidacion();
+        pintarMes();
+        aviso(nuevos.length+' registros agregados desde el respaldo','ok');
+      }catch(err){aviso('El archivo no es un respaldo válido','mal');}
+    };
+    lector.readAsText(f);
+  };
+  inp.click();
+}
+function menu(){
+  const op=prompt('Escriba una opción:\n\n1 · Exportar a Excel\n2 · Descargar respaldo (.json)\n3 · Cargar respaldo (.json)\n4 · Sincronizar con la nube\n5 · Borrar todos los registros');
+  if(op==='1')exportarExcel();
+  else if(op==='2')exportarRespaldo();
+  else if(op==='3')importarRespaldo();
+  else if(op==='4')sincronizarTodo();
+  else if(op==='5'){
+    if(!validacionAbierta){aviso('Solo el verificador puede borrar los registros','mal');return;}
+    if(confirm('Se eliminarán TODOS los registros guardados en este dispositivo. ¿Continuar?')&&
+       confirm('Confirme otra vez. Descargue antes un respaldo si lo necesita.')){
+      registros=[];persistir();actualizarContador();actualizarBadge();
+      pintarValidacion();pintarMes();aviso('Registros eliminados');
+    }
+  }
+}
+
+/* ===================== Inicio ===================== */
+function actualizarContador(){
+  const h=hoyISO();
+  const t=registros.filter(r=>r.fecha===h).reduce((s,r)=>{
+    const c=calculaDe(r);return s+(c?c.extra:0);},0);
+  $('horasHoy').textContent=fmt(t,1);
+}
+
+NOMINA.forEach(p=>{
+  const o=document.createElement('option');
+  o.value=p.fila;o.textContent=nombreCompleto(p)+' · '+p.puesto;
+  $('persona').appendChild(o);
+});
+MESES.forEach((m,i)=>{
+  const o=document.createElement('option');o.value=i;o.textContent=m;
+  $('mMes').appendChild(o);
+});
+
+cargar();
+const hoy=new Date();
+$('fecha').value=hoyISO();
+$('vFecha').value=hoyISO();
+$('mMes').value=hoy.getMonth();
+$('mAnio').value=hoy.getFullYear();
+iniciarFirma();
+calcula();
+actualizarContador();
+actualizarBadge();
+</script>
+</body>
+</html>
