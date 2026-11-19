@@ -345,7 +345,7 @@ table.tb tr:nth-child(even) td{background:#f7f9f8}
 /* ===================== Configuración ===================== */
 // Para sincronizar a Google Sheets, pegue aquí la URL del Apps Script.
 // Déjelo vacío y la aplicación funciona igual, guardando en el dispositivo.
-const SHEETS_URL='';
+const SHEETS_URL='https://script.google.com/macros/s/AKfycbxjA3b6YelTnzOommRhKWfrftkr-_NP9F4_M-vAQKJxpu1JKwdf1rk08dUPqh-yBmK_/exec';
 
 // Código de acceso del verificador. Cámbielo por el que prefiera.
 const PIN_VERIFICADOR='2026';
@@ -504,8 +504,8 @@ function verPestana(cual){
   if(cual==='reg'){b.textContent='Enviar registro';b.onclick=guardar;}
   else if(cual==='val'){b.textContent='Aprobar los pendientes';b.onclick=aprobarTodos;}
   else{b.textContent='Exportar a Excel';b.onclick=exportarExcel;}
-  if(cual==='val'&&validacionAbierta)pintarValidacion();
-  if(cual==='mes')pintarMes();
+  if(cual==='val'&&validacionAbierta){pintarValidacion();bajarDeNube(pintarValidacion);}
+  if(cual==='mes'){pintarMes();bajarDeNube(pintarMes);}
   window.scrollTo(0,0);
 }
 
@@ -557,7 +557,7 @@ function guardar(){
   limpiarFormulario();
   actualizarContador();actualizarBadge();
   aviso('Registro enviado · '+c.tipo.toLowerCase()+' · '+fmt(c.extra,2)+' h extra','ok');
-  enviarASheets(r);
+  enviarASheets(r,'guardar');
 }
 function limpiarFormulario(){
   ['persona','entrada','salida','actividad'].forEach(id=>{$(id).value='';$(id).classList.remove('error');});
@@ -573,6 +573,7 @@ function abrirValidacion(){
   validacionAbierta=true;
   $('candado').hidden=true;$('panelVal').hidden=false;
   pintarValidacion();
+  bajarDeNube(pintarValidacion);
 }
 function registrosDia(){
   const f=$('vFecha').value, est=$('vEstado').value;
@@ -619,6 +620,8 @@ function pintarValidacion(){
         <button class="mini peligro" onclick="borrar(${r.id})">Eliminar</button>
       </div>
     </div>`;}).join('');
+  if(SHEETS_URL)cont.innerHTML+='<div style="text-align:center;margin-top:14px">'+
+    '<button class="mini" onclick="bajarDeNube(pintarValidacion)">Actualizar desde la nube</button></div>';
   actualizarBadge();
 }
 function aprobar(id){
@@ -632,7 +635,7 @@ function aprobar(id){
   r.validadoEn=new Date().toLocaleString('es-GT');
   persistir();pintarValidacion();actualizarContador();
   aviso('Aprobado · '+r.nombres+' '+r.apellidos,'ok');
-  enviarASheets(r);
+  enviarASheets(r,'actualizar');
 }
 function aprobarTodos(){
   if(!validacionAbierta){aviso('Primero escriba el código de acceso','mal');return;}
@@ -646,7 +649,7 @@ function aprobarTodos(){
     const c=calculaDe(r);
     r.tipo=c.tipo;r.extra=c.extra;r.trabajadas=c.trabajadas;
     r.estado='aprobado';r.validadoPor=quien.trim();r.validadoEn=cuando;
-    enviarASheets(r);
+    enviarASheets(r,'actualizar');
   });
   persistir();pintarValidacion();actualizarContador();
   aviso(pend.length+' registros aprobados','ok');
@@ -669,7 +672,7 @@ function ajustar(id){
   const c2=calculaDe(r);r.tipo=c2.tipo;r.extra=c2.extra;
   persistir();pintarValidacion();actualizarContador();
   aviso('Horas ajustadas a '+fmt(n,2),'ok');
-  enviarASheets(r);
+  enviarASheets(r,'actualizar');
 }
 function verFirma(id){
   const r=registros.find(x=>x.id===id);if(!r)return;
@@ -876,16 +879,57 @@ function exportarExcel(){
 }
 
 /* ===================== Sincronización ===================== */
-function enviarASheets(r){
+let bajando=false;
+
+// Envía un registro. accion 'guardar' lo agrega; 'actualizar' modifica el existente.
+function enviarASheets(r,accion){
   if(!SHEETS_URL)return;
-  fetch(SHEETS_URL,{method:'POST',body:JSON.stringify(Object.assign({tipo:'HORAS EXTRAS'},r))})
+  const carga={accion:accion||'guardar',registro:r};
+  fetch(SHEETS_URL,{method:'POST',body:JSON.stringify(carga)})
     .then(res=>res.json())
     .then(d=>{if(!d.ok)console.warn('Sheets:',d.error);})
     .catch(()=>console.warn('Sin conexión — guardado solo en este dispositivo'));
 }
+
+// Trae los registros de la nube y los une con los de este dispositivo.
+function bajarDeNube(despues){
+  if(!SHEETS_URL){if(despues)despues();return;}
+  if(bajando)return;
+  bajando=true;
+  fetch(SHEETS_URL+'?accion=listar')
+    .then(res=>res.json())
+    .then(d=>{
+      bajando=false;
+      if(!d.ok)throw 0;
+      const nube=(d.registros||[]).filter(r=>r&&r.id);
+      const porId={};
+      registros.forEach(r=>porId[r.id]=r);
+      let nuevos=0;
+      nube.forEach(r=>{
+        r.id=Number(r.id);
+        r.fecha=String(r.fecha||'').slice(0,10);
+        r.entrada=String(r.entrada||'').slice(0,5);
+        r.salida=String(r.salida||'').slice(0,5);
+        r.fila=Number(r.fila)||0;
+        r.ajuste=(r.ajuste===''||r.ajuste==null)?null:Number(r.ajuste);
+        r.tipoAjuste=r.tipoAjuste||null;
+        if(!porId[r.id])nuevos++;
+        porId[r.id]=Object.assign(porId[r.id]||{},r);
+      });
+      registros=Object.values(porId).filter(r=>r.fecha);
+      persistir();actualizarContador();actualizarBadge();
+      if(nuevos)aviso(nuevos+' registros nuevos desde la nube','ok');
+      if(despues)despues();
+    })
+    .catch(()=>{
+      bajando=false;
+      aviso('No se pudo consultar la nube','mal');
+      if(despues)despues();
+    });
+}
 function sincronizarTodo(){
   if(!SHEETS_URL){aviso('Aún no se ha configurado la hoja en la nube','mal');return;}
-  registros.forEach(enviarASheets);
+  registros.forEach(r=>enviarASheets(r,'guardar'));
   aviso('Enviando '+registros.length+' registros a la nube','ok');
 }
 
@@ -923,11 +967,12 @@ function importarRespaldo(){
   inp.click();
 }
 function menu(){
-  const op=prompt('Escriba una opción:\n\n1 · Exportar a Excel\n2 · Descargar respaldo (.json)\n3 · Cargar respaldo (.json)\n4 · Sincronizar con la nube\n5 · Borrar todos los registros');
+  const op=prompt('Escriba una opción:\n\n1 · Exportar a Excel\n2 · Descargar respaldo (.json)\n3 · Cargar respaldo (.json)\n4 · Traer registros de la nube\n5 · Borrar todos los registros de este equipo\n6 · Reenviar todo a la nube');
   if(op==='1')exportarExcel();
   else if(op==='2')exportarRespaldo();
   else if(op==='3')importarRespaldo();
-  else if(op==='4')sincronizarTodo();
+  else if(op==='4')bajarDeNube(()=>{pintarMes();if(validacionAbierta)pintarValidacion();});
+  else if(op==='6')sincronizarTodo();
   else if(op==='5'){
     if(!validacionAbierta){aviso('Solo el verificador puede borrar los registros','mal');return;}
     if(confirm('Se eliminarán TODOS los registros guardados en este dispositivo. ¿Continuar?')&&
@@ -966,6 +1011,7 @@ iniciarFirma();
 calcula();
 actualizarContador();
 actualizarBadge();
+bajarDeNube();
 </script>
 </body>
 </html>
